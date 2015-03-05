@@ -1,2 +1,2 @@
 # escaliot
-Library on top of the Escalus for the IoT over XMPP
+Library on top of escalus for the IoT over XMPP
