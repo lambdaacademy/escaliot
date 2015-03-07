@@ -1,0 +1,12 @@
+{application, escaliot,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { escaliot_app, []}},
+  {env, []}
+ ]}.
