@@ -5,7 +5,9 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+                  exml,
+                  escalus
                  ]},
   {mod, { escaliot_app, []}},
   {env, []}
