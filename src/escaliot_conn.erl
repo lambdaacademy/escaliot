@@ -10,6 +10,7 @@
 -export([send_message/3]).
 -export([join_room/3, register_handler/3, unregister_handler/2, filter_by_jid/2, subscribe_to_messages_from/3, cancel_subscription/2]).
 -export([stop/1]).
+-define(RETURN, ok). % Return value for subscripted handler when sender does not match.
 
 -record(state, {client,handlers}).
 
@@ -45,10 +46,23 @@ unregister_handler(Connection, Handler) ->
   Msg = {unregister_handler, Handler},
   simple_call(Connection, Msg).
 
+
+subscribe_to_messages_from(Connection, all, Handler) ->         % It is normal handler but checks sender before handling message.
+  Fun = fun(Msg) ->
+    case escalus_pred:is_message(Msg) of
+      true ->
+        Handler(Msg);
+      _ -> ?RETURN
+    end
+  end,
+  Ref = make_ref(),
+  register_handler(Connection, Ref, Fun),
+  {ok, Ref};
+
 subscribe_to_messages_from(Connection, JID, Handler) ->
   Fun = fun(Msg) ->
     case filter_by_jid(Msg, JID) of
-      true->
+      true ->
       Handler(Msg);
       _ -> ok
     end
@@ -79,9 +93,6 @@ init([Username, Domain, Password, Resource, Opts]) ->
     end.
 
 loop(Client, Handlers, JoinedRooms) ->
-
-%    maybe_handle_stanza(Stanzas, Handlers),
-  %%Stanzas = escalus_client:wait_for_stanza(Client),
     receive
         {{send_message, Text, To}, FromPid} ->
             M = case proplists:get_value(To, JoinedRooms, undefined) of
@@ -115,10 +126,12 @@ loop(Client, Handlers, JoinedRooms) ->
         stop ->
             escalus_client:stop(Client),
             ok;
-      {stanza,_,Stanza} ->
-            handle_stanza(Stanza, Handlers),
-            loop(Client, Handlers, JoinedRooms)
-    after 0 ->
+      {stanza, _, Stanza} ->
+            P = handle_stanza(Stanza, Handlers),
+            F = io_lib:format("~p",[P]),
+            io:format("~p",[lists:flatten(F)]),
+            loop(Client, Handlers, JoinedRooms);
+      _ ->
               loop(Client, Handlers, JoinedRooms)
     end.
 
@@ -136,11 +149,10 @@ simple_call(Connection, Msg) ->
     end.
 
 filter_by_jid(Stanza, Jid) ->
-  escalus_pred:is_message(Stanza) and escalus_pred:is_stanza_from(Jid,Stanza).
+  escalus_pred:is_message(Stanza) and escalus_pred:is_stanza_from(Jid, Stanza).
 
 handle_stanza(Stanza, Handlers) ->
-  dict:fold(fun(_,HandlerList,Acc) ->
-    lists:foreach(fun(Fun) -> Fun(Stanza) end, HandlerList), Acc end, ok,Handlers).
+  dict:fold(fun(_, Handler, Acc) -> [(hd(Handler))(Stanza)] ++ Acc end, [], Handlers).
 
 user_spec(Username, Domain, Password, Resource) ->
     [ {username, Username},

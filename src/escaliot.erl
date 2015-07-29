@@ -10,6 +10,7 @@
 -type connection() :: pid().
 -type handler_function() :: fun( (binary()) -> ok ).
 -type connection_options() :: [connection_option()].
+-type subscription() :: binary() | all.
 -type connection_option() :: {atom(), any()}. %% escalus options
 
 
@@ -30,7 +31,7 @@ join_room(Connection, RoomJid, Nick) ->
 send_message(Connection, To , Content) ->
     escaliot_conn:send_message(Connection, To, Content).
 
--spec subscribe_to_messages_from(connection(), binary(), handler_function()) -> {ok, reference()}.  %| {error, any()}.
+-spec subscribe_to_messages_from(connection(), subscription(), handler_function()) -> {ok, reference()}.  %| {error, any()}.
 subscribe_to_messages_from(Connection, JID, Handler) ->
     escaliot_conn:subscribe_to_messages_from(Connection, JID, Handler).
 
