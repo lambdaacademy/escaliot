@@ -8,7 +8,7 @@
 -export([start_link/5]).
 
 -export([send_message/3]).
--export([join_room/3]).
+-export([join_room/3, register_handler/3, unregister_handler/2, filter_by_jid/2, subscribe_to_messages_from/3, cancel_subscription/2]).
 -export([stop/1]).
 
 -record(state, {client,handlers}).
@@ -37,6 +37,32 @@ join_room(Connection, RoomJid, Nick) ->
     Msg = {join_room, RoomJid, Nick},
     simple_call(Connection, Msg).
 
+register_handler(Connection, HandlerName, Handler) ->
+    Msg = {register_handler, HandlerName, Handler},
+    simple_call(Connection, Msg).
+
+unregister_handler(Connection, Handler) ->
+  Msg = {unregister_handler, Handler},
+  simple_call(Connection, Msg).
+
+subscribe_to_messages_from(Connection, JID, Handler) ->
+  Fun = fun(Msg) ->
+    case filter_by_jid(Msg, JID) of
+      true->
+      Handler(Msg);
+      _ -> ok
+    end
+  end,
+  Ref = make_ref(),
+  register_handler(Connection, Ref, Fun),
+  {ok, Ref}.
+
+cancel_subscription(Connection, JID) ->
+  case unregister_handler(Connection, JID) of
+    ok -> ok;
+    _ -> {error, subscription_doesnt_exist}
+  end.
+
 %%%===================================================================
 %%%
 %%%===================================================================
@@ -53,8 +79,9 @@ init([Username, Domain, Password, Resource, Opts]) ->
     end.
 
 loop(Client, Handlers, JoinedRooms) ->
-    Stanzas = escalus_client:wait_for_stanzas(Client, 1, 50),
+
 %    maybe_handle_stanza(Stanzas, Handlers),
+  %%Stanzas = escalus_client:wait_for_stanza(Client),
     receive
         {{send_message, Text, To}, FromPid} ->
             M = case proplists:get_value(To, JoinedRooms, undefined) of
@@ -71,15 +98,31 @@ loop(Client, Handlers, JoinedRooms) ->
             NewRooms = [{Room, Nick} | JoinedRooms],
             FromPid ! ok,
             loop(Client, Handlers, NewRooms);
-        {{register_handler, Handler}, _FromPid} ->
-            NewHandlers = Handler,
+        {{register_handler, HandlerName, Handler}, FromPid} ->
+            NewHandlers = dict:append(HandlerName, Handler, Handlers),
+            FromPid ! ok,
             loop(Client, NewHandlers, JoinedRooms);
+      {{unregister_handler, HandlerName}, FromPid} ->
+        case dict:find(HandlerName, Handlers) of
+          error ->
+          FromPid ! {error, no_registered_handler},
+          loop(Client, Handlers, JoinedRooms);
+          _ ->
+        NewHandlers = dict:erase(HandlerName, Handlers),
+        FromPid ! ok,
+        loop(Client, NewHandlers, JoinedRooms)
+        end;
         stop ->
             escalus_client:stop(Client),
-            ok
+            ok;
+      {stanza,_,Stanza} ->
+            handle_stanza(Stanza, Handlers),
+            loop(Client, Handlers, JoinedRooms)
     after 0 ->
               loop(Client, Handlers, JoinedRooms)
     end.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -91,6 +134,13 @@ simple_call(Connection, Msg) ->
     after 5000 ->
               {error, timeout}
     end.
+
+filter_by_jid(Stanza, Jid) ->
+  escalus_pred:is_message(Stanza) and escalus_pred:is_stanza_from(Jid,Stanza).
+
+handle_stanza(Stanza, Handlers) ->
+  dict:fold(fun(_,HandlerList,Acc) ->
+    lists:foreach(fun(Fun) -> Fun(Stanza) end, HandlerList), Acc end, ok,Handlers).
 
 user_spec(Username, Domain, Password, Resource) ->
     [ {username, Username},

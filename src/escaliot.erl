@@ -1,6 +1,6 @@
 -module(escaliot).
 
--export([connect/4, connect/5, close/1]).
+-export([connect/4, connect/5, close/1, subscribe_to_messages_from/3, cancel_subscription/2]).
 %-export([subscribe_to_messages_from/3, cancel_subscription/2]).
 -export([join_room/3]).
 -export([send_message/3]).%%, sent_groupchat_message/3]).
@@ -30,13 +30,13 @@ join_room(Connection, RoomJid, Nick) ->
 send_message(Connection, To , Content) ->
     escaliot_conn:send_message(Connection, To, Content).
 
-%-spec subscribe_to_messages_from(connection(), binary(), handler_function()) -> {ok, reference()} | {error, any()}.
-%subscribe_to_messages_from(Connection, JID, Handler) ->
-%    ok.
+-spec subscribe_to_messages_from(connection(), binary(), handler_function()) -> {ok, reference()}.  %| {error, any()}.
+subscribe_to_messages_from(Connection, JID, Handler) ->
+    escaliot_conn:subscribe_to_messages_from(Connection, JID, Handler).
 
-%-spec cancel_subscription(connection(), reference()) -> ok | {error, subscription_doesnt_exist}.
-%cancel_subscription(Connection, Ref) ->
-%    ok.
+-spec cancel_subscription(connection(), reference()) -> ok | {error, subscription_doesnt_exist}.
+cancel_subscription(Connection, Reference) ->
+    escaliot_conn:cancel_subscription(Connection, Reference).
 
 -spec close(connection()) -> ok.
 close(Connection) ->
