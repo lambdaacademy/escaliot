@@ -3,12 +3,12 @@
 -include_lib("escalus/include/escalus.hrl").
 -include_lib("escalus/include/escalus_xmlns.hrl").
 -include_lib("exml/include/exml.hrl").
-
+-define(TIME,"urn:xmpp:time").
 %% API
 -export([start_link/5]).
 
 -export([send_message/3]).
--export([join_room/3, register_handler/3, unregister_handler/2, filter_by_jid/2, subscribe_to_messages_from/3, cancel_subscription/2]).
+-export([join_room/3, register_handler/3, unregister_handler/2, filter_by_jid/2, subscribe_to_messages_from/3, cancel_subscription/2, get_time/3, ask_time/3]).
 -export([stop/1]).
 -define(RETURN, ok). % Return value for subscripted handler when sender does not match.
 
@@ -37,6 +37,10 @@ send_message(Connection, To, Content) ->
 join_room(Connection, RoomJid, Nick) ->
     Msg = {join_room, RoomJid, Nick},
     simple_call(Connection, Msg).
+
+ask_time(Connection, From, To) ->
+  Msg = {get_time, From, To},
+  simple_call(Connection, Msg).
 
 register_handler(Connection, HandlerName, Handler) ->
     Msg = {register_handler, HandlerName, Handler},
@@ -104,6 +108,10 @@ loop(Client, Handlers, JoinedRooms) ->
             escalus:send(Client, M),
             FromPid ! ok,
             loop(Client, Handlers, JoinedRooms);
+        {{get_time, From, To}, FromPid} ->
+          escalus:send(Client, get_time(Client, From, To)),
+          FromPid ! ok,
+          loop(Client, Handlers, JoinedRooms);
         {{join_room, Room, Nick}, FromPid} ->
             escalus:send(Client, stanza_muc_enter_room(Room, Nick)),
             NewRooms = [{Room, Nick} | JoinedRooms],
@@ -186,5 +194,15 @@ merge_props(New, Old) ->
     lists:foldl(fun({K, _}=El, Acc) ->
                         lists:keystore(K, 1, Acc, El)
                 end, Old, New).
+
+
+get_time(Client, From, To)->
+   Stanza = #xmlel{name = <<"iq">>,
+    attrs = [{<<"from">>,From},
+      {<<"type">>, <<"get">>},
+      {<<"id">>, <<"time_1">>},{<<"to">>,To}],
+    children = #xmlel{name = <<"time">>,
+      attrs = [{<<"xmlns">>, ?NS_TIME}]}}.
+
 
 
